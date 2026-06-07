@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>{% if modo == 'login' %}Iniciar sesión{% else %}Crear cuenta{% endif %} — GastoApp</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="auth-page">
+  <div class="auth-card">
+    <div class="auth-logo">💰</div>
+    <h1 class="auth-title">GastoApp</h1>
+    <p class="auth-sub">{% if modo == 'login' %}Bienvenido de nuevo{% else %}Crea tu cuenta gratis{% endif %}</p>
+
+    {% with msgs = get_flashed_messages(with_categories=true) %}
+      {% for cat, msg in msgs %}
+        <div class="alert alert-{{ cat }}">{{ msg }}</div>
+      {% endfor %}
+    {% endwith %}
+
+    {% if modo == 'login' %}
+    <form method="post" action="/login" class="auth-form">
+      <div class="field">
+        <label>Correo electrónico</label>
+        <input type="email" name="email" placeholder="tu@correo.com" required autofocus>
+      </div>
+      <div class="field">
+        <label>Contraseña</label>
+        <input type="password" name="password" placeholder="••••••••" required>
+      </div>
+      <label class="check-row">
+        <input type="checkbox" name="remember"> Mantener sesión iniciada
+      </label>
+      <button type="submit" class="btn-auth">Iniciar sesión</button>
+    </form>
+    <p class="auth-switch">¿No tienes cuenta? <a href="/register">Regístrate gratis</a></p>
+
+    {% else %}
+    <form method="post" action="/register" class="auth-form">
+      <div class="field">
+        <label>Nombre</label>
+        <input type="text" name="nombre" placeholder="Tu nombre" required autofocus>
+      </div>
+      <div class="field">
+        <label>Correo electrónico</label>
+        <input type="email" name="email" placeholder="tu@correo.com" required>
+      </div>
+      <div class="field">
+        <label>Contraseña</label>
+        <input type="password" name="password" placeholder="Mínimo 6 caracteres" required>
+      </div>
+      <div class="field">
+        <label>Confirmar contraseña</label>
+        <input type="password" name="confirm" placeholder="Repite la contraseña" required>
+      </div>
+      <button type="submit" class="btn-auth">Crear cuenta</button>
+    </form>
+    <p class="auth-switch">¿Ya tienes cuenta? <a href="/login">Inicia sesión</a></p>
+    {% endif %}
+  </div>
+</body>
+</html>
