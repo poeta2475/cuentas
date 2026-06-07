@@ -1,0 +1,188 @@
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: system-ui, sans-serif;
+  background: #0f172a;
+  color: #e2e8f0;
+  min-height: 100vh;
+}
+
+header {
+  background: #1e293b;
+  padding: 1rem 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #334155;
+}
+
+header h1 { font-size: 1.4rem; font-weight: 700; }
+
+header form { display: flex; gap: 0.5rem; }
+
+select {
+  background: #334155;
+  color: #e2e8f0;
+  border: 1px solid #475569;
+  border-radius: 6px;
+  padding: 0.4rem 0.7rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+main { padding: 1.5rem 2rem; max-width: 1200px; margin: 0 auto; }
+
+/* Tarjetas */
+.cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.card {
+  background: #1e293b;
+  border-radius: 12px;
+  padding: 1.2rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  border-left: 4px solid transparent;
+}
+
+.card.ingreso  { border-color: #22c55e; }
+.card.gasto    { border-color: #ef4444; }
+.card.positivo { border-color: #3b82f6; }
+.card.negativo { border-color: #f97316; }
+
+.card .label  { font-size: 0.8rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; }
+.card .monto  { font-size: 1.8rem; font-weight: 700; }
+
+/* Grid 2 columnas */
+.grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+/* Panel genérico */
+.panel {
+  background: #1e293b;
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.panel h2 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 1rem;
+}
+
+/* Formulario */
+.form-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin-bottom: 0.9rem;
+}
+
+.form-row label { font-size: 0.85rem; color: #94a3b8; }
+
+.radio-group { display: flex; gap: 1.2rem; }
+.radio-group label { color: #e2e8f0; font-size: 0.9rem; display: flex; align-items: center; gap: 0.3rem; cursor: pointer; }
+
+input[type="text"],
+input[type="number"],
+input[type="date"],
+select {
+  background: #0f172a;
+  color: #e2e8f0;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.95rem;
+  width: 100%;
+  transition: border-color 0.15s;
+}
+
+input:focus, select:focus { outline: none; border-color: #3b82f6; }
+
+.btn-primary {
+  background: #3b82f6;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 0.6rem 1.4rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  width: 100%;
+  transition: background 0.15s;
+}
+.btn-primary:hover { background: #2563eb; }
+
+/* Tabla */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+th {
+  text-align: left;
+  color: #64748b;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid #334155;
+}
+
+td {
+  padding: 0.6rem 0.75rem;
+  border-bottom: 1px solid #1e293b;
+}
+
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: #ffffff08; }
+
+.monto-cell { font-weight: 600; text-align: right; }
+
+tr.ingreso .monto-cell { color: #22c55e; }
+tr.gasto   .monto-cell { color: #ef4444; }
+
+.badge {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  text-transform: uppercase;
+}
+.badge.ingreso { background: #14532d; color: #4ade80; }
+.badge.gasto   { background: #450a0a; color: #fca5a5; }
+
+.btn-del {
+  background: none;
+  border: none;
+  color: #475569;
+  cursor: pointer;
+  font-size: 0.85rem;
+  padding: 0.2rem 0.4rem;
+  border-radius: 4px;
+  transition: color 0.15s;
+}
+.btn-del:hover { color: #ef4444; }
+
+.empty { color: #475569; font-size: 0.9rem; text-align: center; padding: 2rem 0; }
+
+@media (max-width: 768px) {
+  .cards { grid-template-columns: 1fr; }
+  .grid-2 { grid-template-columns: 1fr; }
+  main { padding: 1rem; }
+}

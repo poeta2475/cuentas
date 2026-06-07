@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Dashboard de Gastos</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <header>
+    <h1>💰 Dashboard de Gastos</h1>
+    <form method="get" action="/" id="filtro-form">
+      <select name="mes" onchange="this.form.submit()">
+        {% for num, nombre in meses %}
+          <option value="{{ num }}" {% if num == mes %}selected{% endif %}>{{ nombre }}</option>
+        {% endfor %}
+      </select>
+      <select name="anio" onchange="this.form.submit()">
+        {% for y in range(2023, 2028) %}
+          <option value="{{ y }}" {% if y == anio %}selected{% endif %}>{{ y }}</option>
+        {% endfor %}
+      </select>
+    </form>
+  </header>
+
+  <main>
+    <!-- Tarjetas resumen -->
+    <section class="cards">
+      <div class="card ingreso">
+        <span class="label">Ingresos</span>
+        <span class="monto">${{ "%.2f"|format(totales.ingresos) }}</span>
+      </div>
+      <div class="card gasto">
+        <span class="label">Gastos</span>
+        <span class="monto">${{ "%.2f"|format(totales.gastos) }}</span>
+      </div>
+      <div class="card balance {% if totales.balance >= 0 %}positivo{% else %}negativo{% endif %}">
+        <span class="label">Balance</span>
+        <span class="monto">${{ "%.2f"|format(totales.balance) }}</span>
+      </div>
+    </section>
+
+    <div class="grid-2">
+      <!-- Formulario -->
+      <section class="panel">
+        <h2>Nueva transacción</h2>
+        <form method="post" action="/agregar" id="form-nueva">
+          <div class="form-row">
+            <label>Tipo</label>
+            <div class="radio-group">
+              <label><input type="radio" name="tipo" value="gasto" checked onchange="actualizarCategorias()"> Gasto</label>
+              <label><input type="radio" name="tipo" value="ingreso" onchange="actualizarCategorias()"> Ingreso</label>
+            </div>
+          </div>
+          <div class="form-row">
+            <label for="categoria">Categoría</label>
+            <select name="categoria" id="categoria">
+              {% for c in categorias_gasto %}
+                <option>{{ c }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="form-row">
+            <label for="descripcion">Descripción</label>
+            <input type="text" name="descripcion" id="descripcion" placeholder="Opcional..." maxlength="100">
+          </div>
+          <div class="form-row">
+            <label for="monto">Monto</label>
+            <input type="number" name="monto" id="monto" step="0.01" min="0.01" required placeholder="0.00">
+          </div>
+          <div class="form-row">
+            <label for="fecha">Fecha</label>
+            <input type="date" name="fecha" id="fecha" value="{{ hoy }}" required>
+          </div>
+          <button type="submit" class="btn-primary">Agregar</button>
+        </form>
+      </section>
+
+      <!-- Gráfica por categoría -->
+      <section class="panel">
+        <h2>Gastos por categoría</h2>
+        {% set gastos_cat = categorias | selectattr("tipo","equalto","gasto") | list %}
+        {% if gastos_cat %}
+          <canvas id="chartCategorias" height="220"></canvas>
+        {% else %}
+          <p class="empty">Sin gastos este mes.</p>
+        {% endif %}
+      </section>
+    </div>
+
+    <!-- Gráfica mensual -->
+    <section class="panel">
+      <h2>Evolución mensual</h2>
+      <canvas id="chartMensual" height="100"></canvas>
+    </section>
+
+    <!-- Lista de transacciones -->
+    <section class="panel">
+      <h2>Transacciones</h2>
+      {% if transacciones %}
+      <table>
+        <thead>
+          <tr><th>Fecha</th><th>Tipo</th><th>Categoría</th><th>Descripción</th><th>Monto</th><th></th></tr>
+        </thead>
+        <tbody>
+          {% for t in transacciones %}
+          <tr class="{{ t.tipo }}">
+            <td>{{ t.fecha }}</td>
+            <td><span class="badge {{ t.tipo }}">{{ t.tipo }}</span></td>
+            <td>{{ t.categoria }}</td>
+            <td>{{ t.descripcion or '—' }}</td>
+            <td class="monto-cell">${{ "%.2f"|format(t.monto) }}</td>
+            <td>
+              <form method="post" action="/eliminar/{{ t.id }}" onsubmit="return confirm('¿Eliminar?')">
+                <input type="hidden" name="mes" value="{{ mes }}">
+                <input type="hidden" name="anio" value="{{ anio }}">
+                <button type="submit" class="btn-del" title="Eliminar">✕</button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+        <p class="empty">No hay transacciones para este mes.</p>
+      {% endif %}
+    </section>
+  </main>
+
+  <script>
+    const categoriasGasto   = {{ categorias_gasto | tojson }};
+    const categoriasIngreso = {{ categorias_ingreso | tojson }};
+
+    function actualizarCategorias() {
+      const tipo = document.querySelector('input[name="tipo"]:checked').value;
+      const sel = document.getElementById("categoria");
+      const lista = tipo === "gasto" ? categoriasGasto : categoriasIngreso;
+      sel.innerHTML = lista.map(c => `<option>${c}</option>`).join("");
+    }
+
+    // Gráfica categorías
+    {% set gastos_cat = categorias | selectattr("tipo","equalto","gasto") | list %}
+    {% if gastos_cat %}
+    new Chart(document.getElementById("chartCategorias"), {
+      type: "doughnut",
+      data: {
+        labels: {{ gastos_cat | map(attribute="categoria") | list | tojson }},
+        datasets: [{
+          data: {{ gastos_cat | map(attribute="total") | list | tojson }},
+          backgroundColor: ["#ef4444","#f97316","#eab308","#22c55e","#3b82f6","#a855f7","#ec4899","#6b7280"],
+        }]
+      },
+      options: { plugins: { legend: { position: "right" } } }
+    });
+    {% endif %}
+
+    // Gráfica mensual
+    fetch("/api/mensual").then(r => r.json()).then(data => {
+      if (!data.labels.length) return;
+      new Chart(document.getElementById("chartMensual"), {
+        type: "bar",
+        data: {
+          labels: data.labels,
+          datasets: [
+            { label: "Ingresos", data: data.ingresos, backgroundColor: "#22c55e" },
+            { label: "Gastos",   data: data.gastos,   backgroundColor: "#ef4444" },
+          ]
+        },
+        options: {
+          responsive: true,
+          scales: { y: { beginAtZero: true } }
+        }
+      });
+    });
+  </script>
+</body>
+</html>

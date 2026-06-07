@@ -2,57 +2,51 @@
 
 ## Qué es este proyecto
 
-Aplicación de escritorio en Python que genera reportes de asistencia del personal.  
-Se conecta a una base de datos Microsoft Access (`FELJA.mdb`) en red, consulta registros de fichaje, los procesa y exporta un Excel.
+Dashboard web de gastos personales en Python (Flask + SQLite + Chart.js).  
+Permite registrar ingresos y gastos, ver resúmenes y gráficas por mes y categoría.
 
-## Archivo principal
+## Archivos
 
-`felja.py` — único script de la app.
-
-### Flujo general
-
-1. Carga credenciales desde `.env` (via `python-dotenv`)
-2. Abre conexión a Access con `pyodbc` al iniciar
-3. Muestra GUI con `PySimpleGUI`: dos calendarios (Desde / Hasta) + botón "Generar reporte"
-4. Al pulsar el botón:
-   - Consulta la tabla `horas_personal_exportar` filtrando por rango de fechas (query parametrizada)
-   - Procesa el DataFrame: renombra columnas, calcula Time In / Time Out por día/empleado, traduce nombre del día al español
-   - Abre diálogo "Guardar como" y exporta a `.xlsx`
-
-### Funciones
-
-| Función | Qué hace |
+| Archivo | Rol |
 |---|---|
-| `get_attendance(conn, fecha_desde, fecha_hasta)` | Query SQL a Access, devuelve DataFrame |
-| `process_dataframe(df)` | Limpia y transforma el DataFrame (agrupa por ID+Fecha, calcula min/max hora) |
+| `app.py` | Servidor Flask — rutas y lógica de vista |
+| `database.py` | Capa de datos — SQLite, queries, inicialización |
+| `templates/index.html` | Única vista: dashboard completo |
+| `static/style.css` | Estilos dark mode |
+| `requirements.txt` | `flask`, `python-dotenv` |
+| `.env.example` | Plantilla de variables de entorno |
 
-## Dependencias (`requirements.txt`)
+## Cómo correr
 
-```
-pyodbc          # Conexión ODBC a Access
-pandas          # Procesamiento de datos
-PySimpleGUI     # GUI de escritorio
-python-dotenv   # Variables de entorno desde .env
-openpyxl        # Escritura de Excel
-```
-
-## Variables de entorno (`.env`, NO en git)
-
-```
-DB_PATH=\\servidor\comun\FELJA.mdb   # ruta de red a la BD (tiene default en código)
-DB_USER=administrador
-DB_PASSWORD=tu_contraseña_aqui
+```bash
+pip install -r requirements.txt
+cp .env.example .env   # editar SECRET_KEY si se quiere
+python app.py
+# → http://localhost:5000
 ```
 
-El `.env.example` está en el repo como plantilla.
+## Base de datos
+
+SQLite (`gastos.db`, se crea automáticamente).  
+Tabla única: `transacciones (id, tipo, categoria, descripcion, monto, fecha)`.
+
+## Rutas Flask
+
+| Método | Ruta | Qué hace |
+|---|---|---|
+| GET | `/` | Dashboard, acepta `?mes=&anio=` |
+| POST | `/agregar` | Inserta transacción |
+| POST | `/eliminar/<id>` | Borra transacción |
+| GET | `/api/mensual` | JSON para gráfica de barras mensual |
+
+## Categorías
+
+- **Gasto:** Comida, Transporte, Vivienda, Salud, Entretenimiento, Ropa, Educación, Otro  
+- **Ingreso:** Sueldo, Freelance, Inversión, Regalo, Otro
 
 ## Rama de trabajo
 
 `claude/repository-code-review-vIehi`
 
-## Historial de cambios relevantes
-
-- **eaaa646** — Fix de seguridad previo: credenciales a variables de entorno, query parametrizada, manejo de errores con popup.
-
 ---
-*Actualizar este archivo con cada cambio importante para no repetir exploración.*
+*Actualizar con cada cambio importante.*

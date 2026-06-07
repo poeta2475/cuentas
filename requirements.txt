@@ -1,5 +1,2 @@
-pyodbc
-pandas
-PySimpleGUI
+flask
 python-dotenv
-openpyxl
