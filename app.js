@@ -30,9 +30,10 @@ const fmt = n => {
 }
 const fmtMes = ym => MESES[+ym.slice(5) - 1].slice(0, 3) + ' ' + ym.slice(2, 4)
 
-let ME     = null
-let VIEW   = { mes: new Date().getMonth() + 1, anio: new Date().getFullYear() }
-let CHARTS = {}
+let ME      = null
+let VIEW    = { mes: new Date().getMonth() + 1, anio: new Date().getFullYear() }
+let CHARTS  = {}
+let ALL_TXS = []
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 async function register(e) {
@@ -91,6 +92,21 @@ async function login(e) {
 
 async function logout() {
   try { await signOut(auth) } catch (_) {}
+}
+
+function exportCSV() {
+  if (!ALL_TXS.length) return alert('No hay transacciones para exportar.')
+  const cols = ['Fecha', 'Tipo', 'Categoría', 'Descripción', 'Monto']
+  const esc  = v => '"' + String(v ?? '').replace(/"/g, '""') + '"'
+  const rows = ALL_TXS.map(t => [t.fecha, t.tipo, t.categoria, t.descripcion || '', t.monto].map(esc).join(','))
+  const csv  = '﻿' + [cols.map(esc).join(','), ...rows].join('\r\n')
+  const a    = Object.assign(document.createElement('a'), {
+    href:     URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' })),
+    download: `gastoapp_${new Date().toISOString().slice(0, 10)}.csv`,
+  })
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
 }
 
 // ── Transactions ──────────────────────────────────────────────────────────────
@@ -264,7 +280,7 @@ function showAuth(modo) {
   `
 }
 
-// ── Render: Error (siempre muestra opciones de navegación) ────────────────────
+// ── Render: Error ───────────────────────────────────────────────────────────
 function showError(err) {
   destroyCharts()
   const isPerm = err.code === 'permission-denied' || (err.message && err.message.includes('permission'))
@@ -311,7 +327,8 @@ async function showDashboard() {
   document.getElementById('root').innerHTML =
     `<div class="loading-screen"><div class="loading-spinner"></div><p>Cargando...</p></div>`
   try {
-    const all  = await loadAllTxs()
+    ALL_TXS    = await loadAllTxs()
+    const all  = ALL_TXS
     const txs  = filterTxs(all)
     const tot  = totals(txs)
     const cats = catData(txs)
@@ -402,7 +419,10 @@ async function showDashboard() {
         </section>
 
         <section class="panel">
-          <h2 class="panel-title">Transacciones del mes</h2>
+          <div class="panel-header">
+            <h2 class="panel-title">Transacciones del mes</h2>
+            <button class="btn-export" onclick="exportCSV()" title="Descargar todo como Excel/CSV">⬇ Exportar todo</button>
+          </div>
           <div class="table-wrap">
             <table>
               <thead><tr><th>Fecha</th><th>Tipo</th><th>Categoría</th><th>Descripción</th><th class="right">Monto</th><th></th></tr></thead>
@@ -418,12 +438,13 @@ async function showDashboard() {
   }
 }
 
-// ── Expose to window (requerido para inline onclick con type="module") ────────
+// ── Expose to window ───────────────────────────────────────────────────────────────
 window.register       = register
 window.login          = login
 window.logout         = logout
 window.addTx          = addTx
 window.deleteTx       = deleteTx
+window.exportCSV      = exportCSV
 window.updateFormCats = updateFormCats
 window.setMes         = setMes
 window.setAnio        = setAnio
