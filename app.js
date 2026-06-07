@@ -23,6 +23,13 @@ const CATS = {
 const MESES  = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
 const COLORS = ['#ef4444','#f97316','#eab308','#22c55e','#3b82f6','#a855f7','#ec4899','#6b7280']
 
+const fmt = n => {
+  const abs = Math.abs(+n)
+  const [int, dec] = abs.toFixed(2).split('.')
+  return (+n < 0 ? '-' : '') + '$' + int.replace(/\B(?=(\d{3})+(?!\d))/g, '.') + ',' + dec
+}
+const fmtMes = ym => MESES[+ym.slice(5) - 1].slice(0, 3) + ' ' + ym.slice(2, 4)
+
 let ME     = null
 let VIEW   = { mes: new Date().getMonth() + 1, anio: new Date().getFullYear() }
 let CHARTS = {}
@@ -180,7 +187,7 @@ function initCharts(cats, all) {
         labels:   cats.map(c => c[0]),
         datasets: [{ data: cats.map(c => c[1]), backgroundColor: COLORS, borderWidth: 2, borderColor: '#1e293b' }],
       },
-      options: { plugins: { legend: { position: 'right', labels: { color: '#94a3b8', padding: 12, boxWidth: 12 } } }, cutout: '65%' },
+      options: { plugins: { legend: { position: 'right', labels: { color: '#94a3b8', padding: 12, boxWidth: 12 } }, tooltip: { callbacks: { label: ctx => ' ' + ctx.label + ': ' + fmt(ctx.parsed) } } }, cutout: '65%' },
     })
   }
   const md = monthlyData(all)
@@ -193,10 +200,13 @@ function initCharts(cats, all) {
       ]},
       options: {
         responsive: true,
-        plugins: { legend: { labels: { color: '#94a3b8' } } },
+        plugins: {
+          legend: { labels: { color: '#94a3b8' } },
+          tooltip: { callbacks: { label: ctx => ' ' + ctx.dataset.label + ': ' + fmt(ctx.parsed.y) } },
+        },
         scales: {
-          x: { ticks: { color: '#64748b' }, grid: { color: '#1e293b' } },
-          y: { beginAtZero: true, ticks: { color: '#64748b' }, grid: { color: '#334155' } },
+          x: { ticks: { color: '#64748b', callback: (_, i) => fmtMes(md.labels[i]) }, grid: { color: '#1e293b' } },
+          y: { beginAtZero: true, ticks: { color: '#64748b', callback: v => fmt(v) }, grid: { color: '#334155' } },
         },
       },
     })
@@ -319,8 +329,8 @@ async function showDashboard() {
             <td><span class="badge ${t.tipo}">${t.tipo}</span></td>
             <td>${t.categoria}</td>
             <td class="td-desc">${t.descripcion || '—'}</td>
-            <td class="right monto-${t.tipo}">$${(+t.monto).toFixed(2)}</td>
-            <td><button class="btn-del" onclick="deleteTx('${t.id}')">✕</button></td>
+            <td class="right monto-${t.tipo}">${fmt(t.monto)}</td>
+            <td><button class="btn-del" title="Eliminar" onclick="deleteTx('${t.id}')">🗑</button></td>
           </tr>`).join('')
       : `<tr><td colspan="6" class="empty-row">No hay transacciones este mes.</td></tr>`
 
@@ -344,15 +354,15 @@ async function showDashboard() {
         <section class="cards">
           <div class="card ingreso">
             <div class="card-icon">↑</div>
-            <div class="card-info"><span class="card-label">Ingresos</span><span class="card-monto">$${tot.ingresos.toFixed(2)}</span></div>
+            <div class="card-info"><span class="card-label">Ingresos</span><span class="card-monto">${fmt(tot.ingresos)}</span></div>
           </div>
           <div class="card gasto">
             <div class="card-icon">↓</div>
-            <div class="card-info"><span class="card-label">Gastos</span><span class="card-monto">$${tot.gastos.toFixed(2)}</span></div>
+            <div class="card-info"><span class="card-label">Gastos</span><span class="card-monto">${fmt(tot.gastos)}</span></div>
           </div>
           <div class="card balance ${balCls}">
             <div class="card-icon">=</div>
-            <div class="card-info"><span class="card-label">Balance</span><span class="card-monto">$${tot.balance.toFixed(2)}</span></div>
+            <div class="card-info"><span class="card-label">Balance</span><span class="card-monto">${fmt(tot.balance)}</span></div>
           </div>
         </section>
 
