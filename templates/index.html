@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>GastoApp — Dashboard</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+
+  <nav class="navbar">
+    <div class="nav-brand">💰 GastoApp</div>
+    <div class="nav-right">
+      <form method="get" action="/" class="nav-filter">
+        <select name="mes" onchange="this.form.submit()">
+          {% for num, nombre in meses %}
+            <option value="{{ num }}" {% if num == mes %}selected{% endif %}>{{ nombre }}</option>
+          {% endfor %}
+        </select>
+        <select name="anio" onchange="this.form.submit()">
+          {% for y in range(2023, 2028) %}
+            <option value="{{ y }}" {% if y == anio %}selected{% endif %}>{{ y }}</option>
+          {% endfor %}
+        </select>
+      </form>
+      <div class="nav-user">
+        <span class="avatar">{{ current_user.nombre[0].upper() }}</span>
+        <span class="nav-nombre">{{ current_user.nombre }}</span>
+        <a href="/logout" class="btn-logout">Salir</a>
+      </div>
+    </div>
+  </nav>
+
+  {% with msgs = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in msgs %}
+      <div class="alert alert-{{ cat }} alert-top">{{ msg }}</div>
+    {% endfor %}
+  {% endwith %}
+
+  <main class="app-main">
+
+    <!-- Tarjetas resumen -->
+    <section class="cards">
+      <div class="card ingreso">
+        <div class="card-icon">↑</div>
+        <div class="card-info">
+          <span class="card-label">Ingresos</span>
+          <span class="card-monto">${{ "%.2f"|format(totales.ingresos) }}</span>
+        </div>
+      </div>
+      <div class="card gasto">
+        <div class="card-icon">↓</div>
+        <div class="card-info">
+          <span class="card-label">Gastos</span>
+          <span class="card-monto">${{ "%.2f"|format(totales.gastos) }}</span>
+        </div>
+      </div>
+      <div class="card balance {% if totales.balance >= 0 %}positivo{% else %}negativo{% endif %}">
+        <div class="card-icon">=</div>
+        <div class="card-info">
+          <span class="card-label">Balance</span>
+          <span class="card-monto">${{ "%.2f"|format(totales.balance) }}</span>
+        </div>
+      </div>
+    </section>
+
+    <div class="grid-2">
+      <!-- Formulario -->
+      <section class="panel">
+        <h2 class="panel-title">Nueva transacción</h2>
+        <form method="post" action="/agregar" id="form-nueva">
+          <div class="tipo-toggle">
+            <label class="toggle-opt gasto-opt">
+              <input type="radio" name="tipo" value="gasto" checked onchange="actualizarCategorias(this)">
+              <span>Gasto</span>
+            </label>
+            <label class="toggle-opt ingreso-opt">
+              <input type="radio" name="tipo" value="ingreso" onchange="actualizarCategorias(this)">
+              <span>Ingreso</span>
+            </label>
+          </div>
+          <div class="field">
+            <label>Categoría</label>
+            <select name="categoria" id="categoria">
+              {% for c in categorias_gasto %}<option>{{ c }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="field">
+            <label>Descripción <small>(opcional)</small></label>
+            <input type="text" name="descripcion" placeholder="Ej: almuerzo con amigos" maxlength="100">
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label>Monto</label>
+              <input type="number" name="monto" step="0.01" min="0.01" required placeholder="0.00">
+            </div>
+            <div class="field">
+              <label>Fecha</label>
+              <input type="date" name="fecha" value="{{ hoy }}" required>
+            </div>
+          </div>
+          <button type="submit" class="btn-primary" id="btn-agregar">+ Agregar gasto</button>
+        </form>
+      </section>
+
+      <!-- Gráfica categorías -->
+      <section class="panel">
+        <h2 class="panel-title">Gastos por categoría</h2>
+        {% set gastos_cat = categorias | selectattr("tipo","equalto","gasto") | list %}
+        {% if gastos_cat %}
+          <div class="chart-wrap"><canvas id="chartCategorias"></canvas></div>
+        {% else %}
+          <div class="empty-state">
+            <span class="empty-icon">📊</span>
+            <p>Sin gastos registrados este mes</p>
+          </div>
+        {% endif %}
+      </section>
+    </div>
+
+    <!-- Gráfica mensual -->
+    <section class="panel">
+      <h2 class="panel-title">Evolución mensual</h2>
+      <div class="chart-wrap-wide"><canvas id="chartMensual"></canvas></div>
+    </section>
+
+    <!-- Lista transacciones -->
+    <section class="panel">
+      <h2 class="panel-title">Transacciones del mes</h2>
+      {% if transacciones %}
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Fecha</th><th>Tipo</th><th>Categoría</th><th>Descripción</th><th class="right">Monto</th><th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for t in transacciones %}
+            <tr>
+              <td class="td-fecha">{{ t.fecha }}</td>
+              <td><span class="badge {{ t.tipo }}">{{ t.tipo }}</span></td>
+              <td>{{ t.categoria }}</td>
+              <td class="td-desc">{{ t.descripcion or '—' }}</td>
+              <td class="right monto-{{ t.tipo }}">${{ "%.2f"|format(t.monto) }}</td>
+              <td>
+                <form method="post" action="/eliminar/{{ t.id }}" onsubmit="return confirm('¿Eliminar esta transacción?')">
+                  <input type="hidden" name="mes"  value="{{ mes }}">
+                  <input type="hidden" name="anio" value="{{ anio }}">
+                  <button class="btn-del" type="submit" title="Eliminar">✕</button>
+                </form>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+        <div class="empty-state">
+          <span class="empty-icon">🗒️</span>
+          <p>No hay transacciones este mes. ¡Agrega la primera!</p>
+        </div>
+      {% endif %}
+    </section>
+
+  </main>
+
+  <script>
+    const CAT_GASTO   = {{ categorias_gasto   | tojson }};
+    const CAT_INGRESO = {{ categorias_ingreso | tojson }};
+
+    function actualizarCategorias(radio) {
+      const sel  = document.getElementById("categoria");
+      const btn  = document.getElementById("btn-agregar");
+      const lista = radio.value === "gasto" ? CAT_GASTO : CAT_INGRESO;
+      sel.innerHTML = lista.map(c => `<option>${c}</option>`).join("");
+      btn.textContent = radio.value === "gasto" ? "+ Agregar gasto" : "+ Agregar ingreso";
+      btn.className   = radio.value === "gasto" ? "btn-primary" : "btn-success";
+    }
+
+    // Gráfica donut categorías
+    {% set gastos_cat = categorias | selectattr("tipo","equalto","gasto") | list %}
+    {% if gastos_cat %}
+    new Chart(document.getElementById("chartCategorias"), {
+      type: "doughnut",
+      data: {
+        labels: {{ gastos_cat | map(attribute="categoria") | list | tojson }},
+        datasets: [{
+          data: {{ gastos_cat | map(attribute="total") | list | tojson }},
+          backgroundColor: ["#ef4444","#f97316","#eab308","#22c55e","#3b82f6","#a855f7","#ec4899","#6b7280"],
+          borderWidth: 2,
+          borderColor: "#1e293b",
+        }]
+      },
+      options: {
+        plugins: { legend: { position:"right", labels:{ color:"#94a3b8", padding:12 } } },
+        cutout: "65%",
+      }
+    });
+    {% endif %}
+
+    // Gráfica barras mensual
+    fetch("/api/mensual").then(r => r.json()).then(data => {
+      if (!data.labels.length) return;
+      new Chart(document.getElementById("chartMensual"), {
+        type: "bar",
+        data: {
+          labels: data.labels,
+          datasets: [
+            { label:"Ingresos", data: data.ingresos, backgroundColor:"#22c55e", borderRadius:6 },
+            { label:"Gastos",   data: data.gastos,   backgroundColor:"#ef4444", borderRadius:6 },
+          ]
+        },
+        options: {
+          responsive: true,
+          plugins: { legend: { labels:{ color:"#94a3b8" } } },
+          scales: {
+            x: { ticks:{ color:"#64748b" }, grid:{ color:"#1e293b" } },
+            y: { beginAtZero:true, ticks:{ color:"#64748b" }, grid:{ color:"#334155" } }
+          }
+        }
+      });
+    });
+  </script>
+</body>
+</html>
