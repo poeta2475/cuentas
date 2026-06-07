@@ -1,4 +1,20 @@
-'use strict'
+import { initializeApp }                                          from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js'
+import { getAuth, createUserWithEmailAndPassword,
+         signInWithEmailAndPassword, signOut,
+         onAuthStateChanged, updateProfile }                       from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js'
+import { getFirestore, collection, addDoc, deleteDoc,
+         doc, query, where, getDocs }                              from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js'
+
+const fbApp = initializeApp({
+  apiKey:            'AIzaSyC-QlZzDFhPzyfVhy4LDrsU-22bYD971Gw',
+  authDomain:        'cuentasdb-558bf.firebaseapp.com',
+  projectId:         'cuentasdb-558bf',
+  storageBucket:     'cuentasdb-558bf.firebasestorage.app',
+  messagingSenderId: '153042308100',
+  appId:             '1:153042308100:web:53593124ca12492f89f951',
+})
+const auth  = getAuth(fbApp)
+const store = getFirestore(fbApp)
 
 const CATS = {
   gasto:   ['Comida','Transporte','Vivienda','Salud','Entretenimiento','Ropa','Educación','Otro'],
@@ -7,86 +23,94 @@ const CATS = {
 const MESES  = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
 const COLORS = ['#ef4444','#f97316','#eab308','#22c55e','#3b82f6','#a855f7','#ec4899','#6b7280']
 
-const db = {
-  users:      () => JSON.parse(localStorage.getItem('ga_users')  || '[]'),
-  txs:        () => JSON.parse(localStorage.getItem('ga_txs')    || '[]'),
-  session:    () => JSON.parse(sessionStorage.getItem('ga_sess') || 'null'),
-  saveUsers:  v  => localStorage.setItem('ga_users',  JSON.stringify(v)),
-  saveTxs:    v  => localStorage.setItem('ga_txs',    JSON.stringify(v)),
-  setSession: v  => v ? sessionStorage.setItem('ga_sess', JSON.stringify(v))
-                      : sessionStorage.removeItem('ga_sess'),
-}
-
 let ME     = null
 let VIEW   = { mes: new Date().getMonth() + 1, anio: new Date().getFullYear() }
 let CHARTS = {}
 
-function register(e) {
+async function register(e) {
   e.preventDefault()
   const nombre  = document.getElementById('r-nombre').value.trim()
-  const email   = document.getElementById('r-email').value.trim().toLowerCase()
+  const email   = document.getElementById('r-email').value.trim()
   const pass    = document.getElementById('r-pass').value
   const confirm = document.getElementById('r-confirm').value
   if (!nombre || !email || !pass) return alert('Todos los campos son obligatorios.')
   if (pass !== confirm)           return alert('Las contraseñas no coinciden.')
   if (pass.length < 6)            return alert('La contraseña debe tener al menos 6 caracteres.')
-  const users = db.users()
-  if (users.find(u => u.email === email)) return alert('Ya existe una cuenta con ese correo.')
-  const user = { id: Date.now(), nombre, email, password: pass }
-  users.push(user)
-  db.saveUsers(users)
-  db.setSession(user)
-  ME = user
-  showDashboard()
+  try {
+    const cred = await createUserWithEmailAndPassword(auth, email, pass)
+    await updateProfile(cred.user, { displayName: nombre })
+  } catch (err) {
+    const msgs = {
+      'auth/email-already-in-use': 'Ya existe una cuenta con ese correo.',
+      'auth/invalid-email':        'Correo electrónico inválido.',
+      'auth/weak-password':        'La contraseña es muy débil.',
+    }
+    alert(msgs[err.code] || 'Error: ' + err.message)
+  }
 }
 
-function login(e) {
+async function login(e) {
   e.preventDefault()
-  const email = document.getElementById('l-email').value.trim().toLowerCase()
+  const email = document.getElementById('l-email').value.trim()
   const pass  = document.getElementById('l-pass').value
-  const user  = db.users().find(u => u.email === email && u.password === pass)
-  if (!user) return alert('Correo o contraseña incorrectos.')
-  db.setSession(user)
-  ME = user
-  showDashboard()
+  try {
+    await signInWithEmailAndPassword(auth, email, pass)
+  } catch (_) {
+    alert('Correo o contraseña incorrectos.')
+  }
 }
 
-function logout() {
-  db.setSession(null)
-  ME = null
-  showAuth('login')
+async function logout() {
+  await signOut(auth)
 }
 
-function addTx(e) {
+async function loadAllTxs() {
+  const q    = query(collection(store, 'transacciones'), where('userId', '==', ME.id))
+  const snap = await getDocs(q)
+  return snap.docs
+    .map(d => ({ id: d.id, ...d.data() }))
+    .sort((a, b) => b.fecha < a.fecha ? -1 : b.fecha > a.fecha ? 1 : 0)
+}
+
+async function addTx(e) {
   e.preventDefault()
-  const tipo      = document.querySelector('input[name="tipo"]:checked').value
-  const categoria = document.getElementById('f-cat').value
-  const desc      = document.getElementById('f-desc').value.trim()
-  const monto     = +document.getElementById('f-monto').value
-  const fecha     = document.getElementById('f-fecha').value
-  const txs = db.txs()
-  txs.push({ id: Date.now(), userId: ME.id, tipo, categoria, descripcion: desc, monto, fecha })
-  db.saveTxs(txs)
-  const d = new Date(fecha + 'T12:00:00')
-  VIEW.mes  = d.getMonth() + 1
-  VIEW.anio = d.getFullYear()
-  showDashboard()
-}
-
-function deleteTx(id) {
-  if (!confirm('¿Eliminar esta transacción?')) return
-  db.saveTxs(db.txs().filter(t => !(t.id === id && t.userId === ME.id)))
-  showDashboard()
-}
-
-function filteredTxs() {
-  return db.txs()
-    .filter(t => {
-      if (t.userId !== ME.id) return false
-      const d = new Date(t.fecha + 'T12:00:00')
-      return d.getMonth() + 1 === VIEW.mes && d.getFullYear() === VIEW.anio
+  const btn = document.getElementById('f-btn')
+  btn.disabled = true
+  btn.textContent = 'Guardando...'
+  try {
+    await addDoc(collection(store, 'transacciones'), {
+      userId:      ME.id,
+      tipo:        document.querySelector('input[name="tipo"]:checked').value,
+      categoria:   document.getElementById('f-cat').value,
+      descripcion: document.getElementById('f-desc').value.trim(),
+      monto:       +document.getElementById('f-monto').value,
+      fecha:       document.getElementById('f-fecha').value,
     })
-    .sort((a, b) => b.fecha < a.fecha ? -1 : b.fecha > a.fecha ? 1 : b.id - a.id)
+    const d = new Date(document.getElementById('f-fecha').value + 'T12:00:00')
+    VIEW.mes  = d.getMonth() + 1
+    VIEW.anio = d.getFullYear()
+    await showDashboard()
+  } catch (err) {
+    alert('Error al guardar: ' + err.message)
+    btn.disabled = false
+  }
+}
+
+async function deleteTx(id) {
+  if (!confirm('¿Eliminar esta transacción?')) return
+  try {
+    await deleteDoc(doc(store, 'transacciones', id))
+    await showDashboard()
+  } catch (err) {
+    alert('Error al eliminar: ' + err.message)
+  }
+}
+
+function filterTxs(all) {
+  return all.filter(t => {
+    const d = new Date(t.fecha + 'T12:00:00')
+    return d.getMonth() + 1 === VIEW.mes && d.getFullYear() === VIEW.anio
+  })
 }
 
 function totals(txs) {
@@ -101,9 +125,9 @@ function catData(txs) {
   return Object.entries(m).sort((a, b) => b[1] - a[1])
 }
 
-function monthlyData() {
+function monthlyData(all) {
   const m = {}
-  db.txs().filter(t => t.userId === ME.id).forEach(t => {
+  all.forEach(t => {
     const k = t.fecha.slice(0, 7)
     if (!m[k]) m[k] = { ingreso: 0, gasto: 0 }
     m[k][t.tipo] += t.monto
@@ -117,15 +141,18 @@ function destroyCharts() {
   CHARTS = {}
 }
 
-function initCharts(cats) {
+function initCharts(cats, all) {
   if (cats.length) {
     CHARTS.donut = new Chart(document.getElementById('c-cats'), {
       type: 'doughnut',
-      data: { labels: cats.map(c => c[0]), datasets: [{ data: cats.map(c => c[1]), backgroundColor: COLORS, borderWidth: 2, borderColor: '#1e293b' }] },
+      data: {
+        labels: cats.map(c => c[0]),
+        datasets: [{ data: cats.map(c => c[1]), backgroundColor: COLORS, borderWidth: 2, borderColor: '#1e293b' }],
+      },
       options: { plugins: { legend: { position: 'right', labels: { color: '#94a3b8', padding: 12, boxWidth: 12 } } }, cutout: '65%' },
     })
   }
-  const md = monthlyData()
+  const md = monthlyData(all)
   if (md.labels.length) {
     CHARTS.bar = new Chart(document.getElementById('c-monthly'), {
       type: 'bar',
@@ -166,97 +193,132 @@ function showAuth(modo) {
         <p class="auth-sub">${isLogin ? 'Bienvenido de nuevo' : 'Crea tu cuenta gratis'}</p>
         ${isLogin ? `
           <form class="auth-form" onsubmit="login(event)">
-            <div class="field"><label>Correo electrónico</label><input type="email" id="l-email" placeholder="tu@correo.com" required autofocus></div>
-            <div class="field"><label>Contraseña</label><input type="password" id="l-pass" placeholder="••••••••" required></div>
+            <div class="field"><label>Correo electrónico</label>
+              <input type="email" id="l-email" placeholder="tu@correo.com" required autofocus></div>
+            <div class="field"><label>Contraseña</label>
+              <input type="password" id="l-pass" placeholder="••••••••" required></div>
             <button type="submit" class="btn-auth">Iniciar sesión</button>
           </form>
-          <p class="auth-switch">¿No tienes cuenta? <a href="#" onclick="showAuth('register');return false">Regístrate gratis</a></p>
+          <p class="auth-switch">¿No tienes cuenta?
+            <a href="#" onclick="showAuth('register');return false">Regístrate gratis</a></p>
         ` : `
           <form class="auth-form" onsubmit="register(event)">
-            <div class="field"><label>Nombre</label><input type="text" id="r-nombre" placeholder="Tu nombre" required autofocus></div>
-            <div class="field"><label>Correo electrónico</label><input type="email" id="r-email" placeholder="tu@correo.com" required></div>
-            <div class="field"><label>Contraseña</label><input type="password" id="r-pass" placeholder="Mínimo 6 caracteres" required></div>
-            <div class="field"><label>Confirmar contraseña</label><input type="password" id="r-confirm" placeholder="Repite la contraseña" required></div>
+            <div class="field"><label>Nombre</label>
+              <input type="text" id="r-nombre" placeholder="Tu nombre" required autofocus></div>
+            <div class="field"><label>Correo electrónico</label>
+              <input type="email" id="r-email" placeholder="tu@correo.com" required></div>
+            <div class="field"><label>Contraseña</label>
+              <input type="password" id="r-pass" placeholder="Mínimo 6 caracteres" required></div>
+            <div class="field"><label>Confirmar contraseña</label>
+              <input type="password" id="r-confirm" placeholder="Repite la contraseña" required></div>
             <button type="submit" class="btn-auth">Crear cuenta</button>
           </form>
-          <p class="auth-switch">¿Ya tienes cuenta? <a href="#" onclick="showAuth('login');return false">Inicia sesión</a></p>
+          <p class="auth-switch">¿Ya tienes cuenta?
+            <a href="#" onclick="showAuth('login');return false">Inicia sesión</a></p>
         `}
       </div>
     </div>
   `
 }
 
-function showDashboard() {
+async function showDashboard() {
   destroyCharts()
-  const txs  = filteredTxs()
-  const tot  = totals(txs)
-  const cats = catData(txs)
-  const hoy  = new Date().toISOString().slice(0, 10)
-  const { mes, anio } = VIEW
-  const mesOpts  = MESES.map((n,i) => `<option value="${i+1}"${i+1===mes?' selected':''}>${n}</option>`).join('')
-  const anioOpts = [2023,2024,2025,2026,2027].map(y => `<option value="${y}"${y===anio?' selected':''}>${y}</option>`).join('')
-  const balCls   = tot.balance >= 0 ? 'positivo' : 'negativo'
-  const rows = txs.length
-    ? txs.map(t => `<tr><td class="td-fecha">${t.fecha}</td><td><span class="badge ${t.tipo}">${t.tipo}</span></td><td>${t.categoria}</td><td class="td-desc">${t.descripcion||'—'}</td><td class="right monto-${t.tipo}">$${(+t.monto).toFixed(2)}</td><td><button class="btn-del" onclick="deleteTx(${t.id})">✕</button></td></tr>`).join('')
-    : `<tr><td colspan="6" class="empty-row">No hay transacciones este mes.</td></tr>`
-
-  document.getElementById('root').innerHTML = `
-    <nav class="navbar">
-      <div class="nav-brand">💰 GastoApp</div>
-      <div class="nav-right">
-        <div class="nav-filter"><select onchange="setMes(this.value)">${mesOpts}</select><select onchange="setAnio(this.value)">${anioOpts}</select></div>
-        <div class="nav-user">
-          <span class="avatar">${ME.nombre[0].toUpperCase()}</span>
-          <span class="nav-nombre">${ME.nombre}</span>
-          <a href="#" class="btn-logout" onclick="logout();return false">Salir</a>
+  document.getElementById('root').innerHTML =
+    `<div class="loading-screen"><div class="loading-spinner"></div><p>Cargando...</p></div>`
+  try {
+    const all  = await loadAllTxs()
+    const txs  = filterTxs(all)
+    const tot  = totals(txs)
+    const cats = catData(txs)
+    const hoy  = new Date().toISOString().slice(0, 10)
+    const { mes, anio } = VIEW
+    const mesOpts  = MESES.map((n, i) => `<option value="${i+1}"${i+1===mes?' selected':''}>${n}</option>`).join('')
+    const anioOpts = [2023,2024,2025,2026,2027].map(y => `<option value="${y}"${y===anio?' selected':''}>${y}</option>`).join('')
+    const balCls   = tot.balance >= 0 ? 'positivo' : 'negativo'
+    const rows = txs.length
+      ? txs.map(t => `
+          <tr>
+            <td class="td-fecha">${t.fecha}</td>
+            <td><span class="badge ${t.tipo}">${t.tipo}</span></td>
+            <td>${t.categoria}</td>
+            <td class="td-desc">${t.descripcion || '—'}</td>
+            <td class="right monto-${t.tipo}">$${(+t.monto).toFixed(2)}</td>
+            <td><button class="btn-del" onclick="deleteTx('${t.id}')">✕</button></td>
+          </tr>`).join('')
+      : `<tr><td colspan="6" class="empty-row">No hay transacciones este mes.</td></tr>`
+    document.getElementById('root').innerHTML = `
+      <nav class="navbar">
+        <div class="nav-brand">💰 GastoApp</div>
+        <div class="nav-right">
+          <div class="nav-filter">
+            <select onchange="setMes(this.value)">${mesOpts}</select>
+            <select onchange="setAnio(this.value)">${anioOpts}</select>
+          </div>
+          <div class="nav-user">
+            <span class="avatar">${ME.nombre[0].toUpperCase()}</span>
+            <span class="nav-nombre">${ME.nombre}</span>
+            <a href="#" class="btn-logout" onclick="logout();return false">Salir</a>
+          </div>
         </div>
-      </div>
-    </nav>
-    <main class="app-main">
-      <section class="cards">
-        <div class="card ingreso"><div class="card-icon">↑</div><div class="card-info"><span class="card-label">Ingresos</span><span class="card-monto">$${tot.ingresos.toFixed(2)}</span></div></div>
-        <div class="card gasto"><div class="card-icon">↓</div><div class="card-info"><span class="card-label">Gastos</span><span class="card-monto">$${tot.gastos.toFixed(2)}</span></div></div>
-        <div class="card balance ${balCls}"><div class="card-icon">=</div><div class="card-info"><span class="card-label">Balance</span><span class="card-monto">$${tot.balance.toFixed(2)}</span></div></div>
-      </section>
-      <div class="grid-2">
-        <section class="panel">
-          <h2 class="panel-title">Nueva transacción</h2>
-          <form onsubmit="addTx(event)">
-            <div class="tipo-toggle">
-              <label class="toggle-opt gasto-opt"><input type="radio" name="tipo" value="gasto" checked onchange="updateFormCats(this)"><span>Gasto</span></label>
-              <label class="toggle-opt ingreso-opt"><input type="radio" name="tipo" value="ingreso" onchange="updateFormCats(this)"><span>Ingreso</span></label>
-            </div>
-            <div class="field"><label>Categoría</label><select id="f-cat">${CATS.gasto.map(c=>`<option>${c}</option>`).join('')}</select></div>
-            <div class="field"><label>Descripción <small>(opcional)</small></label><input type="text" id="f-desc" placeholder="Ej: almuerzo con amigos" maxlength="100"></div>
-            <div class="field-row">
-              <div class="field"><label>Monto</label><input type="number" id="f-monto" step="0.01" min="0.01" required placeholder="0.00"></div>
-              <div class="field"><label>Fecha</label><input type="date" id="f-fecha" value="${hoy}" required></div>
-            </div>
-            <button type="submit" class="btn-primary" id="f-btn">+ Agregar gasto</button>
-          </form>
+      </nav>
+      <main class="app-main">
+        <section class="cards">
+          <div class="card ingreso"><div class="card-icon">↑</div><div class="card-info"><span class="card-label">Ingresos</span><span class="card-monto">$${tot.ingresos.toFixed(2)}</span></div></div>
+          <div class="card gasto"><div class="card-icon">↓</div><div class="card-info"><span class="card-label">Gastos</span><span class="card-monto">$${tot.gastos.toFixed(2)}</span></div></div>
+          <div class="card balance ${balCls}"><div class="card-icon">=</div><div class="card-info"><span class="card-label">Balance</span><span class="card-monto">$${tot.balance.toFixed(2)}</span></div></div>
         </section>
+        <div class="grid-2">
+          <section class="panel">
+            <h2 class="panel-title">Nueva transacción</h2>
+            <form onsubmit="addTx(event)">
+              <div class="tipo-toggle">
+                <label class="toggle-opt gasto-opt"><input type="radio" name="tipo" value="gasto" checked onchange="updateFormCats(this)"><span>Gasto</span></label>
+                <label class="toggle-opt ingreso-opt"><input type="radio" name="tipo" value="ingreso" onchange="updateFormCats(this)"><span>Ingreso</span></label>
+              </div>
+              <div class="field"><label>Categoría</label><select id="f-cat">${CATS.gasto.map(c=>`<option>${c}</option>`).join('')}</select></div>
+              <div class="field"><label>Descripción <small>(opcional)</small></label><input type="text" id="f-desc" placeholder="Ej: almuerzo con amigos" maxlength="100"></div>
+              <div class="field-row">
+                <div class="field"><label>Monto</label><input type="number" id="f-monto" step="0.01" min="0.01" required placeholder="0.00"></div>
+                <div class="field"><label>Fecha</label><input type="date" id="f-fecha" value="${hoy}" required></div>
+              </div>
+              <button type="submit" class="btn-primary" id="f-btn">+ Agregar gasto</button>
+            </form>
+          </section>
+          <section class="panel">
+            <h2 class="panel-title">Gastos por categoría</h2>
+            ${cats.length ? `<div class="chart-wrap"><canvas id="c-cats"></canvas></div>` : `<div class="empty-state"><span class="empty-icon">📊</span><p>Sin gastos este mes</p></div>`}
+          </section>
+        </div>
+        <section class="panel"><h2 class="panel-title">Evolución mensual</h2><div class="chart-wrap-wide"><canvas id="c-monthly"></canvas></div></section>
         <section class="panel">
-          <h2 class="panel-title">Gastos por categoría</h2>
-          ${cats.length ? `<div class="chart-wrap"><canvas id="c-cats"></canvas></div>` : `<div class="empty-state"><span class="empty-icon">📊</span><p>Sin gastos este mes</p></div>`}
+          <h2 class="panel-title">Transacciones del mes</h2>
+          <div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Tipo</th><th>Categoría</th><th>Descripción</th><th class="right">Monto</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
         </section>
-      </div>
-      <section class="panel"><h2 class="panel-title">Evolución mensual</h2><div class="chart-wrap-wide"><canvas id="c-monthly"></canvas></div></section>
-      <section class="panel">
-        <h2 class="panel-title">Transacciones del mes</h2>
-        <div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Tipo</th><th>Categoría</th><th>Descripción</th><th class="right">Monto</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
-      </section>
-    </main>
-  `
-  initCharts(cats)
+      </main>
+    `
+    initCharts(cats, all)
+  } catch (err) {
+    document.getElementById('root').innerHTML =
+      `<div class="loading-screen"><p style="color:var(--red)">Error: ${err.message}</p></div>`
+  }
 }
 
-;(function () {
-  const sess = db.session()
-  if (sess) {
-    const user = db.users().find(u => u.id === sess.id)
-    if (user) { ME = user; showDashboard() }
-    else       { db.setSession(null); showAuth('login') }
+window.register       = register
+window.login          = login
+window.logout         = logout
+window.addTx          = addTx
+window.deleteTx       = deleteTx
+window.updateFormCats = updateFormCats
+window.setMes         = setMes
+window.setAnio        = setAnio
+window.showAuth       = showAuth
+
+onAuthStateChanged(auth, user => {
+  if (user) {
+    ME = { id: user.uid, nombre: user.displayName || user.email, email: user.email }
+    showDashboard()
   } else {
+    ME = null
     showAuth('login')
   }
-})()
+})
