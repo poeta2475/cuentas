@@ -107,6 +107,20 @@ body:has(.auth-page) { background: radial-gradient(ellipse at top, #1a1f3a 0%, v
 
 .nav-filter select { background: var(--surface); border-color: var(--border); padding: 0.35rem 0.6rem; font-size: 0.85rem; width: auto; }
 
+.loading-screen {
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  min-height: 100vh; gap: 1rem; color: var(--muted);
+}
+.loading-spinner {
+  width: 40px; height: 40px;
+  border: 3px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
 @media (max-width: 768px) {
   .cards { grid-template-columns: 1fr; }
   .grid-2 { grid-template-columns: 1fr; }
