@@ -2,51 +2,65 @@
 
 ## Qué es este proyecto
 
-Dashboard web de gastos personales en Python (Flask + SQLite + Chart.js).  
-Permite registrar ingresos y gastos, ver resúmenes y gráficas por mes y categoría.
+Dashboard web de gastos personales con cuentas de usuario.  
+Stack: Flask + SQLite + Chart.js. Dark mode. Deployable en Railway/Render.
 
 ## Archivos
 
 | Archivo | Rol |
 |---|---|
-| `app.py` | Servidor Flask — rutas y lógica de vista |
-| `database.py` | Capa de datos — SQLite, queries, inicialización |
-| `templates/index.html` | Única vista: dashboard completo |
-| `static/style.css` | Estilos dark mode |
-| `requirements.txt` | `flask`, `python-dotenv` |
-| `.env.example` | Plantilla de variables de entorno |
+| `app.py` | Flask — rutas, login_required, auth |
+| `database.py` | SQLite — usuarios + transacciones |
+| `templates/auth.html` | Página login/registro (mismo template, `modo` cambia el contenido) |
+| `templates/index.html` | Dashboard principal |
+| `static/style.css` | Estilos dark mode completos |
+| `requirements.txt` | flask, flask-login, python-dotenv, gunicorn |
+| `Procfile` | Para Railway/Render: `gunicorn app:app` |
 
-## Cómo correr
+## Cómo correr en local
 
 ```bash
 pip install -r requirements.txt
-cp .env.example .env   # editar SECRET_KEY si se quiere
+cp .env.example .env   # editar SECRET_KEY
 python app.py
 # → http://localhost:5000
 ```
 
-## Base de datos
+## Base de datos SQLite (`gastos.db`)
 
-SQLite (`gastos.db`, se crea automáticamente).  
-Tabla única: `transacciones (id, tipo, categoria, descripcion, monto, fecha)`.
+Tablas:
+- `usuarios (id, nombre, email, password [hash], creado)`
+- `transacciones (id, user_id FK, tipo, categoria, descripcion, monto, fecha)`
 
-## Rutas Flask
+Datos aislados por usuario (cada uno ve solo los suyos).
 
-| Método | Ruta | Qué hace |
-|---|---|---|
-| GET | `/` | Dashboard, acepta `?mes=&anio=` |
-| POST | `/agregar` | Inserta transacción |
-| POST | `/eliminar/<id>` | Borra transacción |
-| GET | `/api/mensual` | JSON para gráfica de barras mensual |
+## Rutas
 
-## Categorías
+| Método | Ruta | Auth | Qué hace |
+|---|---|---|---|
+| GET/POST | `/login` | No | Iniciar sesión |
+| GET/POST | `/register` | No | Crear cuenta |
+| GET | `/logout` | Sí | Cerrar sesión |
+| GET | `/` | Sí | Dashboard (`?mes=&anio=`) |
+| POST | `/agregar` | Sí | Nueva transacción |
+| POST | `/eliminar/<id>` | Sí | Borrar transacción |
+| GET | `/api/mensual` | Sí | JSON para gráfica barras |
 
-- **Gasto:** Comida, Transporte, Vivienda, Salud, Entretenimiento, Ropa, Educación, Otro  
-- **Ingreso:** Sueldo, Freelance, Inversión, Regalo, Otro
+## Deploy en Railway (gratis)
+
+1. Push a GitHub
+2. Entrar a [railway.app](https://railway.app) → New Project → Deploy from GitHub
+3. Agregar variable de entorno `SECRET_KEY` en Railway
+4. Listo — URL pública automática
+
+**Nota:** En Railway el filesystem es efímero. Para persistencia real de la DB agregar un volumen o migrar a PostgreSQL.
 
 ## Rama de trabajo
 
 `claude/repository-code-review-vIehi`
 
----
-*Actualizar con cada cambio importante.*
+## Historial
+
+- v1: script desktop felja.py (Access + PySimpleGUI) — eliminado
+- v2: Flask app básica sin auth
+- v3: Auth completa (registro/login/logout), datos por usuario, diseño mejorado, Procfile para deploy

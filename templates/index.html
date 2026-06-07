@@ -1,145 +1,185 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Dashboard de Gastos</title>
+  <title>GastoApp — Dashboard</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
-  <header>
-    <h1>💰 Dashboard de Gastos</h1>
-    <form method="get" action="/" id="filtro-form">
-      <select name="mes" onchange="this.form.submit()">
-        {% for num, nombre in meses %}
-          <option value="{{ num }}" {% if num == mes %}selected{% endif %}>{{ nombre }}</option>
-        {% endfor %}
-      </select>
-      <select name="anio" onchange="this.form.submit()">
-        {% for y in range(2023, 2028) %}
-          <option value="{{ y }}" {% if y == anio %}selected{% endif %}>{{ y }}</option>
-        {% endfor %}
-      </select>
-    </form>
-  </header>
 
-  <main>
+  <nav class="navbar">
+    <div class="nav-brand">💰 GastoApp</div>
+    <div class="nav-right">
+      <form method="get" action="/" class="nav-filter">
+        <select name="mes" onchange="this.form.submit()">
+          {% for num, nombre in meses %}
+            <option value="{{ num }}" {% if num == mes %}selected{% endif %}>{{ nombre }}</option>
+          {% endfor %}
+        </select>
+        <select name="anio" onchange="this.form.submit()">
+          {% for y in range(2023, 2028) %}
+            <option value="{{ y }}" {% if y == anio %}selected{% endif %}>{{ y }}</option>
+          {% endfor %}
+        </select>
+      </form>
+      <div class="nav-user">
+        <span class="avatar">{{ current_user.nombre[0].upper() }}</span>
+        <span class="nav-nombre">{{ current_user.nombre }}</span>
+        <a href="/logout" class="btn-logout">Salir</a>
+      </div>
+    </div>
+  </nav>
+
+  {% with msgs = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in msgs %}
+      <div class="alert alert-{{ cat }} alert-top">{{ msg }}</div>
+    {% endfor %}
+  {% endwith %}
+
+  <main class="app-main">
+
     <!-- Tarjetas resumen -->
     <section class="cards">
       <div class="card ingreso">
-        <span class="label">Ingresos</span>
-        <span class="monto">${{ "%.2f"|format(totales.ingresos) }}</span>
+        <div class="card-icon">↑</div>
+        <div class="card-info">
+          <span class="card-label">Ingresos</span>
+          <span class="card-monto">${{ "%.2f"|format(totales.ingresos) }}</span>
+        </div>
       </div>
       <div class="card gasto">
-        <span class="label">Gastos</span>
-        <span class="monto">${{ "%.2f"|format(totales.gastos) }}</span>
+        <div class="card-icon">↓</div>
+        <div class="card-info">
+          <span class="card-label">Gastos</span>
+          <span class="card-monto">${{ "%.2f"|format(totales.gastos) }}</span>
+        </div>
       </div>
       <div class="card balance {% if totales.balance >= 0 %}positivo{% else %}negativo{% endif %}">
-        <span class="label">Balance</span>
-        <span class="monto">${{ "%.2f"|format(totales.balance) }}</span>
+        <div class="card-icon">=</div>
+        <div class="card-info">
+          <span class="card-label">Balance</span>
+          <span class="card-monto">${{ "%.2f"|format(totales.balance) }}</span>
+        </div>
       </div>
     </section>
 
     <div class="grid-2">
       <!-- Formulario -->
       <section class="panel">
-        <h2>Nueva transacción</h2>
+        <h2 class="panel-title">Nueva transacción</h2>
         <form method="post" action="/agregar" id="form-nueva">
-          <div class="form-row">
-            <label>Tipo</label>
-            <div class="radio-group">
-              <label><input type="radio" name="tipo" value="gasto" checked onchange="actualizarCategorias()"> Gasto</label>
-              <label><input type="radio" name="tipo" value="ingreso" onchange="actualizarCategorias()"> Ingreso</label>
-            </div>
+          <div class="tipo-toggle">
+            <label class="toggle-opt gasto-opt">
+              <input type="radio" name="tipo" value="gasto" checked onchange="actualizarCategorias(this)">
+              <span>Gasto</span>
+            </label>
+            <label class="toggle-opt ingreso-opt">
+              <input type="radio" name="tipo" value="ingreso" onchange="actualizarCategorias(this)">
+              <span>Ingreso</span>
+            </label>
           </div>
-          <div class="form-row">
-            <label for="categoria">Categoría</label>
+          <div class="field">
+            <label>Categoría</label>
             <select name="categoria" id="categoria">
-              {% for c in categorias_gasto %}
-                <option>{{ c }}</option>
-              {% endfor %}
+              {% for c in categorias_gasto %}<option>{{ c }}</option>{% endfor %}
             </select>
           </div>
-          <div class="form-row">
-            <label for="descripcion">Descripción</label>
-            <input type="text" name="descripcion" id="descripcion" placeholder="Opcional..." maxlength="100">
+          <div class="field">
+            <label>Descripción <small>(opcional)</small></label>
+            <input type="text" name="descripcion" placeholder="Ej: almuerzo con amigos" maxlength="100">
           </div>
-          <div class="form-row">
-            <label for="monto">Monto</label>
-            <input type="number" name="monto" id="monto" step="0.01" min="0.01" required placeholder="0.00">
+          <div class="field-row">
+            <div class="field">
+              <label>Monto</label>
+              <input type="number" name="monto" step="0.01" min="0.01" required placeholder="0.00">
+            </div>
+            <div class="field">
+              <label>Fecha</label>
+              <input type="date" name="fecha" value="{{ hoy }}" required>
+            </div>
           </div>
-          <div class="form-row">
-            <label for="fecha">Fecha</label>
-            <input type="date" name="fecha" id="fecha" value="{{ hoy }}" required>
-          </div>
-          <button type="submit" class="btn-primary">Agregar</button>
+          <button type="submit" class="btn-primary" id="btn-agregar">+ Agregar gasto</button>
         </form>
       </section>
 
-      <!-- Gráfica por categoría -->
+      <!-- Gráfica categorías -->
       <section class="panel">
-        <h2>Gastos por categoría</h2>
+        <h2 class="panel-title">Gastos por categoría</h2>
         {% set gastos_cat = categorias | selectattr("tipo","equalto","gasto") | list %}
         {% if gastos_cat %}
-          <canvas id="chartCategorias" height="220"></canvas>
+          <div class="chart-wrap"><canvas id="chartCategorias"></canvas></div>
         {% else %}
-          <p class="empty">Sin gastos este mes.</p>
+          <div class="empty-state">
+            <span class="empty-icon">📊</span>
+            <p>Sin gastos registrados este mes</p>
+          </div>
         {% endif %}
       </section>
     </div>
 
     <!-- Gráfica mensual -->
     <section class="panel">
-      <h2>Evolución mensual</h2>
-      <canvas id="chartMensual" height="100"></canvas>
+      <h2 class="panel-title">Evolución mensual</h2>
+      <div class="chart-wrap-wide"><canvas id="chartMensual"></canvas></div>
     </section>
 
-    <!-- Lista de transacciones -->
+    <!-- Lista transacciones -->
     <section class="panel">
-      <h2>Transacciones</h2>
+      <h2 class="panel-title">Transacciones del mes</h2>
       {% if transacciones %}
-      <table>
-        <thead>
-          <tr><th>Fecha</th><th>Tipo</th><th>Categoría</th><th>Descripción</th><th>Monto</th><th></th></tr>
-        </thead>
-        <tbody>
-          {% for t in transacciones %}
-          <tr class="{{ t.tipo }}">
-            <td>{{ t.fecha }}</td>
-            <td><span class="badge {{ t.tipo }}">{{ t.tipo }}</span></td>
-            <td>{{ t.categoria }}</td>
-            <td>{{ t.descripcion or '—' }}</td>
-            <td class="monto-cell">${{ "%.2f"|format(t.monto) }}</td>
-            <td>
-              <form method="post" action="/eliminar/{{ t.id }}" onsubmit="return confirm('¿Eliminar?')">
-                <input type="hidden" name="mes" value="{{ mes }}">
-                <input type="hidden" name="anio" value="{{ anio }}">
-                <button type="submit" class="btn-del" title="Eliminar">✕</button>
-              </form>
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Fecha</th><th>Tipo</th><th>Categoría</th><th>Descripción</th><th class="right">Monto</th><th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for t in transacciones %}
+            <tr>
+              <td class="td-fecha">{{ t.fecha }}</td>
+              <td><span class="badge {{ t.tipo }}">{{ t.tipo }}</span></td>
+              <td>{{ t.categoria }}</td>
+              <td class="td-desc">{{ t.descripcion or '—' }}</td>
+              <td class="right monto-{{ t.tipo }}">${{ "%.2f"|format(t.monto) }}</td>
+              <td>
+                <form method="post" action="/eliminar/{{ t.id }}" onsubmit="return confirm('¿Eliminar esta transacción?')">
+                  <input type="hidden" name="mes"  value="{{ mes }}">
+                  <input type="hidden" name="anio" value="{{ anio }}">
+                  <button class="btn-del" type="submit" title="Eliminar">✕</button>
+                </form>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
       {% else %}
-        <p class="empty">No hay transacciones para este mes.</p>
+        <div class="empty-state">
+          <span class="empty-icon">🗒️</span>
+          <p>No hay transacciones este mes. ¡Agrega la primera!</p>
+        </div>
       {% endif %}
     </section>
+
   </main>
 
   <script>
-    const categoriasGasto   = {{ categorias_gasto | tojson }};
-    const categoriasIngreso = {{ categorias_ingreso | tojson }};
+    const CAT_GASTO   = {{ categorias_gasto   | tojson }};
+    const CAT_INGRESO = {{ categorias_ingreso | tojson }};
 
-    function actualizarCategorias() {
-      const tipo = document.querySelector('input[name="tipo"]:checked').value;
-      const sel = document.getElementById("categoria");
-      const lista = tipo === "gasto" ? categoriasGasto : categoriasIngreso;
+    function actualizarCategorias(radio) {
+      const sel  = document.getElementById("categoria");
+      const btn  = document.getElementById("btn-agregar");
+      const lista = radio.value === "gasto" ? CAT_GASTO : CAT_INGRESO;
       sel.innerHTML = lista.map(c => `<option>${c}</option>`).join("");
+      btn.textContent = radio.value === "gasto" ? "+ Agregar gasto" : "+ Agregar ingreso";
+      btn.className   = radio.value === "gasto" ? "btn-primary" : "btn-success";
     }
 
-    // Gráfica categorías
+    // Gráfica donut categorías
     {% set gastos_cat = categorias | selectattr("tipo","equalto","gasto") | list %}
     {% if gastos_cat %}
     new Chart(document.getElementById("chartCategorias"), {
@@ -149,13 +189,18 @@
         datasets: [{
           data: {{ gastos_cat | map(attribute="total") | list | tojson }},
           backgroundColor: ["#ef4444","#f97316","#eab308","#22c55e","#3b82f6","#a855f7","#ec4899","#6b7280"],
+          borderWidth: 2,
+          borderColor: "#1e293b",
         }]
       },
-      options: { plugins: { legend: { position: "right" } } }
+      options: {
+        plugins: { legend: { position:"right", labels:{ color:"#94a3b8", padding:12 } } },
+        cutout: "65%",
+      }
     });
     {% endif %}
 
-    // Gráfica mensual
+    // Gráfica barras mensual
     fetch("/api/mensual").then(r => r.json()).then(data => {
       if (!data.labels.length) return;
       new Chart(document.getElementById("chartMensual"), {
@@ -163,13 +208,17 @@
         data: {
           labels: data.labels,
           datasets: [
-            { label: "Ingresos", data: data.ingresos, backgroundColor: "#22c55e" },
-            { label: "Gastos",   data: data.gastos,   backgroundColor: "#ef4444" },
+            { label:"Ingresos", data: data.ingresos, backgroundColor:"#22c55e", borderRadius:6 },
+            { label:"Gastos",   data: data.gastos,   backgroundColor:"#ef4444", borderRadius:6 },
           ]
         },
         options: {
           responsive: true,
-          scales: { y: { beginAtZero: true } }
+          plugins: { legend: { labels:{ color:"#94a3b8" } } },
+          scales: {
+            x: { ticks:{ color:"#64748b" }, grid:{ color:"#1e293b" } },
+            y: { beginAtZero:true, ticks:{ color:"#64748b" }, grid:{ color:"#334155" } }
+          }
         }
       });
     });

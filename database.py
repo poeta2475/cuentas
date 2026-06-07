@@ -1,21 +1,32 @@
 import sqlite3
+import os
 from contextlib import contextmanager
+from werkzeug.security import generate_password_hash, check_password_hash
 
-DB_FILE = "gastos.db"
+DB_FILE = os.environ.get("DATABASE_URL", "gastos.db")
 
 SCHEMA = """
+CREATE TABLE IF NOT EXISTS usuarios (
+    id       INTEGER PRIMARY KEY AUTOINCREMENT,
+    nombre   TEXT NOT NULL,
+    email    TEXT NOT NULL UNIQUE,
+    password TEXT NOT NULL,
+    creado   TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE TABLE IF NOT EXISTS transacciones (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    tipo TEXT NOT NULL CHECK(tipo IN ('ingreso', 'gasto')),
-    categoria TEXT NOT NULL,
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id     INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+    tipo        TEXT NOT NULL CHECK(tipo IN ('ingreso','gasto')),
+    categoria   TEXT NOT NULL,
     descripcion TEXT,
-    monto REAL NOT NULL,
-    fecha TEXT NOT NULL
+    monto       REAL NOT NULL,
+    fecha       TEXT NOT NULL
 );
 """
 
-CATEGORIAS_GASTO = ["Comida", "Transporte", "Vivienda", "Salud", "Entretenimiento", "Ropa", "Educación", "Otro"]
-CATEGORIAS_INGRESO = ["Sueldo", "Freelance", "Inversión", "Regalo", "Otro"]
+CATEGORIAS_GASTO   = ["Comida","Transporte","Vivienda","Salud","Entretenimiento","Ropa","Educación","Otro"]
+CATEGORIAS_INGRESO = ["Sueldo","Freelance","Inversión","Regalo","Otro"]
 
 
 def init_db():
@@ -27,6 +38,7 @@ def init_db():
 def get_conn():
     conn = sqlite3.connect(DB_FILE)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON")
     try:
         yield conn
         conn.commit()
@@ -34,66 +46,88 @@ def get_conn():
         conn.close()
 
 
-def insertar(tipo, categoria, descripcion, monto, fecha):
+# ── Usuarios ──────────────────────────────────────────────────────────────────
+
+def crear_usuario(nombre, email, password):
     with get_conn() as conn:
         conn.execute(
-            "INSERT INTO transacciones (tipo, categoria, descripcion, monto, fecha) VALUES (?,?,?,?,?)",
-            (tipo, categoria, descripcion, monto, fecha),
+            "INSERT INTO usuarios (nombre, email, password) VALUES (?,?,?)",
+            (nombre.strip(), email.strip().lower(), generate_password_hash(password)),
         )
 
 
-def eliminar(id_):
+def buscar_usuario_por_email(email):
     with get_conn() as conn:
-        conn.execute("DELETE FROM transacciones WHERE id = ?", (id_,))
+        row = conn.execute("SELECT * FROM usuarios WHERE email = ?", (email.strip().lower(),)).fetchone()
+        return dict(row) if row else None
 
 
-def listar(mes=None, anio=None):
-    sql = "SELECT * FROM transacciones"
-    params = []
+def buscar_usuario_por_id(user_id):
+    with get_conn() as conn:
+        row = conn.execute("SELECT * FROM usuarios WHERE id = ?", (user_id,)).fetchone()
+        return dict(row) if row else None
+
+
+def verificar_password(usuario, password):
+    return check_password_hash(usuario["password"], password)
+
+
+# ── Transacciones ─────────────────────────────────────────────────────────────
+
+def insertar(user_id, tipo, categoria, descripcion, monto, fecha):
+    with get_conn() as conn:
+        conn.execute(
+            "INSERT INTO transacciones (user_id,tipo,categoria,descripcion,monto,fecha) VALUES (?,?,?,?,?,?)",
+            (user_id, tipo, categoria, descripcion, monto, fecha),
+        )
+
+
+def eliminar(user_id, id_):
+    with get_conn() as conn:
+        conn.execute("DELETE FROM transacciones WHERE id=? AND user_id=?", (id_, user_id))
+
+
+def listar(user_id, mes=None, anio=None):
+    sql = "SELECT * FROM transacciones WHERE user_id=?"
+    params = [user_id]
     if mes and anio:
-        sql += " WHERE strftime('%m', fecha) = ? AND strftime('%Y', fecha) = ?"
-        params = [f"{int(mes):02d}", str(anio)]
+        sql += " AND strftime('%m',fecha)=? AND strftime('%Y',fecha)=?"
+        params += [f"{int(mes):02d}", str(anio)]
     sql += " ORDER BY fecha DESC, id DESC"
     with get_conn() as conn:
         return [dict(r) for r in conn.execute(sql, params).fetchall()]
 
 
-def resumen_por_categoria(mes=None, anio=None):
-    sql = """
-        SELECT tipo, categoria, SUM(monto) as total
-        FROM transacciones
-    """
-    params = []
+def resumen_por_categoria(user_id, mes=None, anio=None):
+    sql = "SELECT tipo, categoria, SUM(monto) as total FROM transacciones WHERE user_id=?"
+    params = [user_id]
     if mes and anio:
-        sql += " WHERE strftime('%m', fecha) = ? AND strftime('%Y', fecha) = ?"
-        params = [f"{int(mes):02d}", str(anio)]
+        sql += " AND strftime('%m',fecha)=? AND strftime('%Y',fecha)=?"
+        params += [f"{int(mes):02d}", str(anio)]
     sql += " GROUP BY tipo, categoria ORDER BY tipo, total DESC"
     with get_conn() as conn:
         return [dict(r) for r in conn.execute(sql, params).fetchall()]
 
 
-def resumen_mensual():
+def resumen_mensual(user_id):
     sql = """
-        SELECT strftime('%Y-%m', fecha) as mes,
-               tipo,
-               SUM(monto) as total
-        FROM transacciones
-        GROUP BY mes, tipo
-        ORDER BY mes
+        SELECT strftime('%Y-%m', fecha) as mes, tipo, SUM(monto) as total
+        FROM transacciones WHERE user_id=?
+        GROUP BY mes, tipo ORDER BY mes
     """
     with get_conn() as conn:
-        return [dict(r) for r in conn.execute(sql).fetchall()]
+        return [dict(r) for r in conn.execute(sql, [user_id]).fetchall()]
 
 
-def totales(mes=None, anio=None):
-    sql = "SELECT tipo, SUM(monto) as total FROM transacciones"
-    params = []
+def totales(user_id, mes=None, anio=None):
+    sql = "SELECT tipo, SUM(monto) as total FROM transacciones WHERE user_id=?"
+    params = [user_id]
     if mes and anio:
-        sql += " WHERE strftime('%m', fecha) = ? AND strftime('%Y', fecha) = ?"
-        params = [f"{int(mes):02d}", str(anio)]
+        sql += " AND strftime('%m',fecha)=? AND strftime('%Y',fecha)=?"
+        params += [f"{int(mes):02d}", str(anio)]
     sql += " GROUP BY tipo"
     with get_conn() as conn:
         rows = {r["tipo"]: r["total"] for r in conn.execute(sql, params).fetchall()}
-    ingresos = rows.get("ingreso", 0) or 0
-    gastos = rows.get("gasto", 0) or 0
-    return {"ingresos": ingresos, "gastos": gastos, "balance": ingresos - gastos}
+    ing  = rows.get("ingreso", 0) or 0
+    gas  = rows.get("gasto",   0) or 0
+    return {"ingresos": ing, "gastos": gas, "balance": ing - gas}
